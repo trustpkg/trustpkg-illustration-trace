@@ -33,9 +33,9 @@ func initScripts(logHandler *logger.Logger) (result error) {
 	}
 	defer func() { result = errors.Join(result, finish()) }()
 
-	preCommitFile, err := os.Open("hooks/pre-commit.sh")
+	preCommitFile, err := os.Open("git-hooks/pre-commit.sh")
 	if err != nil {
-		logHandler.Print("Failed to Open hooks/pre-commit.sh", logger.SeverityError)
+		logHandler.Print("Failed to Open git-hooks/pre-commit.sh", logger.SeverityError)
 
 		return err
 	}
@@ -62,7 +62,7 @@ func initScripts(logHandler *logger.Logger) (result error) {
 		return err
 	}
 
-	logHandler.Print("Successfully initialized hooks/pre-commit script", logger.SeveritySuccess)
+	logHandler.Print("Successfully initialized git-hooks/pre-commit script", logger.SeveritySuccess)
 
 	return nil
 }
