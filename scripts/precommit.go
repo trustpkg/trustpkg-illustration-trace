@@ -10,7 +10,22 @@ import (
 	"github.com/trustpkg/trustpkg-cli-forge/pkg/logger"
 )
 
-func runPrecommit(logHandler *logger.Logger) (result error) {
+func versionBumpCallback(logHandler *logger.Logger) VersionBumpCallback {
+	return func(step string, details string) {
+		switch step {
+		case "validation":
+			if err := logHandler.Print(details, logger.SeverityInfo, logger.WithTimestamp); err != nil {
+				fmt.Fprintf(os.Stderr, "Error logging: %v\n", err)
+			}
+		case "bump":
+			if err := logHandler.Print(details, logger.SeveritySuccess, logger.WithTimestamp); err != nil {
+				fmt.Fprintf(os.Stderr, "Error logging: %v\n", err)
+			}
+		}
+	}
+}
+
+func runPrecommit(logHandler *logger.Logger, messageFile string) (result error) {
 	footerActive := false
 	if err := logHandler.StartFooter("Running pre-commit hook"); err != nil {
 		if !errors.Is(err, logger.ErrFooterUnsupported) {
@@ -25,14 +40,14 @@ func runPrecommit(logHandler *logger.Logger) (result error) {
 
 	finish, err := logHandler.StartSection("Running pre-commit hook", logger.SeverityInfo)
 	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		return err
 	}
 	defer func() {
-		fmt.Print("")
-
 		message, severity := "Pre-commit hook completed", logger.SeveritySuccess
 		if result != nil {
 			message, severity = "Pre-commit hook failed", logger.SeverityError
+			result = errors.Join(result, printCommitError(logHandler, result))
 		}
 		result = errors.Join(result, logHandler.Print(message, severity, logger.WithTimestamp), finish())
 	}()
@@ -48,8 +63,8 @@ func runPrecommit(logHandler *logger.Logger) (result error) {
 		{"gitleaks", "git", "--staged", "--verbose", "--redact", "--no-color", "--exit-code", "1"},
 	}
 
-	for i, command := range commands {
-		if i > 0 {
+	for index, command := range commands {
+		if index > 0 {
 			if err := logHandler.Print(""); err != nil {
 				return err
 			}
@@ -60,6 +75,26 @@ func runPrecommit(logHandler *logger.Logger) (result error) {
 			}
 		}
 		if err := runCommand(logHandler, command[0], command[1:]...); err != nil {
+			return err
+		}
+	}
+
+	if messageFile != "" {
+		if footerActive {
+			if err := logHandler.UpdateFooter("Validating commit and bumping version"); err != nil {
+				return err
+			}
+		}
+		if err := logHandler.Print(""); err != nil {
+			return err
+		}
+		if err := logHandler.Print("Validating commit and version", logger.SeverityStart, logger.WithTimestamp); err != nil {
+			return err
+		}
+		if err := validateCommitVersion(messageFile, versionBumpCallback(logHandler)); err != nil {
+			return err
+		}
+		if err := logHandler.Print("Commit and version validation completed", logger.SeveritySuccess, logger.WithTimestamp); err != nil {
 			return err
 		}
 	}
@@ -96,9 +131,7 @@ func runCommand(logHandler *logger.Logger, name string, args ...string) (result 
 }
 
 func Precommit(logHandler *logger.Logger) {
-	if err := runPrecommit(logHandler); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-
+	if err := runPrecommit(logHandler, ""); err != nil {
 		os.Exit(1)
 	}
 }

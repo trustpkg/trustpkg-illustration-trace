@@ -3,27 +3,45 @@ package scripts
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
+	"time"
 
 	"github.com/trustpkg/trustpkg-cli-forge/pkg/logger"
 )
 
+type hook struct {
+	source      string
+	destination string
+}
+
+var hooks = []hook{
+	{source: "git-hooks/pre-commit.sh", destination: "pre-commit"},
+	{source: "git-hooks/commit-msg.sh", destination: "commit-msg"},
+	{source: "git-hooks/post-commit.sh", destination: "post-commit"},
+}
+
+const (
+	destinationDirectory = ".git/hooks"
+)
+
 func Init(logHandler *logger.Logger) {
 	if err := initScripts(logHandler); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		logHandler.Print(fmt.Sprintf("Failed to initialize git-hooks scripts: %v", err), logger.SeverityError)
 
 		os.Exit(1)
 	}
 }
 
 func initScripts(logHandler *logger.Logger) (result error) {
+	footerActive := false
 	if err := logHandler.StartFooter("Initializing git-hooks scripts"); err != nil {
 		if !errors.Is(err, logger.ErrFooterUnsupported) {
 			return err
 		}
+
 		fmt.Fprintln(os.Stderr, "Warning:", err)
 	} else {
+		footerActive = true
 		defer func() { result = errors.Join(result, logHandler.StopFooter()) }()
 	}
 
@@ -33,36 +51,23 @@ func initScripts(logHandler *logger.Logger) (result error) {
 	}
 	defer func() { result = errors.Join(result, finish()) }()
 
-	preCommitFile, err := os.Open("git-hooks/pre-commit.sh")
-	if err != nil {
-		logHandler.Print("Failed to Open git-hooks/pre-commit.sh", logger.SeverityError)
+	for _, hook := range hooks {
+		if footerActive {
+			if err := logHandler.UpdateFooter("Installing " + hook.source); err != nil {
+				return err
+			}
+		}
 
-		return err
-	}
-	defer preCommitFile.Close()
+		if err := copyToGitHooks(hook.source, hook.destination); err != nil {
+			logHandler.Print(fmt.Sprintf("Failed to install %s", hook.source), logger.SeverityError)
 
-	destinationFile, err := os.Create(".git/hooks/pre-commit")
-	if err != nil {
-		logHandler.Print("Failed to create pre-commit file", logger.SeverityError)
+			return err
+		}
 
-		return err
-	}
-	defer destinationFile.Close()
-
-	err = os.Chmod(destinationFile.Name(), 0755)
-	if err != nil {
-		logHandler.Print("Failed to set executable permission for pre-commit file", logger.SeverityError)
-
-		return err
+		time.Sleep(time.Second / 2)
 	}
 
-	if _, err := io.Copy(destinationFile, preCommitFile); err != nil {
-		logHandler.Print("Failed to copy to pre-commit file", logger.SeverityError)
-
-		return err
-	}
-
-	logHandler.Print("Successfully initialized git-hooks/pre-commit script", logger.SeveritySuccess)
+	logHandler.Print("Successfully initialized git-hooks scripts", logger.SeveritySuccess)
 
 	return nil
 }

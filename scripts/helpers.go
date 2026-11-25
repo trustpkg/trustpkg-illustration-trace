@@ -2,6 +2,7 @@ package scripts
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/trustpkg/trustpkg-cli-forge/pkg/facts"
@@ -28,4 +29,29 @@ func RunTerminal() *logger.Logger {
 	logHandler := logger.NewLogger(logger.NewLoggerInput{Facts: terminalFacts, Theme: handler.Theme(), MaxWidth: &maxWidth})
 
 	return logHandler
+}
+
+func copyToGitHooks(source string, destination string) error {
+	sourceFile, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destinationFile, err := os.Create(fmt.Sprintf("%s/%s", destinationDirectory, destination))
+	if err != nil {
+		return err
+	}
+	defer destinationFile.Close()
+
+	err = os.Chmod(destinationFile.Name(), 0755)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(destinationFile, sourceFile); err != nil {
+		return err
+	}
+
+	return nil
 }

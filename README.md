@@ -3,11 +3,23 @@ Lightweight image contour extraction and skeleton placeholder generation based o
 
 ## Git hooks
 
-Run `make init` from the repository root to copy hooks from `git-hooks/` into
-Git's hooks directory (normally `.git/hooks`). Existing hook files are not
-overwritten. The pre-commit hook requires Go, `govulncheck` and `gitleaks` on
-`PATH`.
+Run `make init` from the repository root to install the hooks in `.git/hooks`.
+This overwrites existing hooks with the same names. The checks require Go,
+`govulncheck` and `gitleaks` on `PATH`.
 
-To add a hook, register its Git hook name and Go function in `scripts.Hooks`,
-then run the init command again. Hook arguments are forwarded after the hook
-name in `os.Args`.
+Use `git commit -m "fix: description"` normally. The `commit-msg` hook runs
+the checks and validates the message and version. After a successful commit,
+the `post-commit` hook bumps `VERSION` and amends that commit. Consecutive
+commits do not require a push. If `HEAD` has no `VERSION`, the staged or
+working-tree file is used as the initial version.
+
+The amend changes the commit hash. A `post-commit` failure cannot cancel the
+original commit: check the error and repair the version before pushing. Signed
+commits are not amended automatically; update the version and re-sign them
+manually. Merge commits are not amended automatically. Manually amending a
+commit runs the hook again and can bump its version again.
+
+`fix` bumps patch, `feat` bumps minor, and `feat!`, `fix!` or `build!` bumps
+major. Other supported types leave the version unchanged. Scopes such as
+`feat(api)!` are supported. Resolve unrelated changes to `VERSION` before
+committing. Re-run `make init` after updating hooks.

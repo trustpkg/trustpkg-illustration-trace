@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-go run ./cmd/repo-scripts pre-commit
+# Checks run in commit-msg, where the commit message is available.
